@@ -23,6 +23,8 @@ import {z} from 'genkit';
 const GenerateAiFeedbackInputSchema = z.object({
   studentAnswer: z.string().describe('The answer provided by the student.'),
   modelAnswer: z.string().describe('The expected or model answer.'),
+  question: z.string().describe('The question that was asked.'),
+  rubric: z.string().optional().describe('The rubric for grading the answer.'),
 });
 export type GenerateAiFeedbackInput = z.infer<typeof GenerateAiFeedbackInputSchema>;
 
@@ -51,10 +53,15 @@ const generateFeedbackPrompt = ai.definePrompt({
   input: {schema: GenerateAiFeedbackInputSchema},
   output: {schema: GenerateAiFeedbackOutputSchema},
   prompt: `You are an AI assistant providing constructive feedback to students. 
-Given the student's answer and the model answer, generate a short, helpful, and encouraging feedback comment.
+Given the question, the student's answer, the model answer, and an optional grading rubric, generate a short, helpful, and encouraging feedback comment.
+If a rubric is provided, use it to inform the feedback.
 
+Question: {{{question}}}
 Student Answer: {{{studentAnswer}}}
 Model Answer: {{{modelAnswer}}}
+{{#if rubric}}
+Rubric: {{{rubric}}}
+{{/if}}
 
 Feedback:`,
 });
@@ -73,3 +80,5 @@ const generateAiFeedbackFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

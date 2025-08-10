@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo, useCallback } from 'react';
@@ -14,7 +15,7 @@ import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { GradeWiseLogo } from '@/components/icons';
-import { AlertCircle, FileText, Upload, Sparkles, ClipboardEdit, ArrowRight, BookCheck, ThumbsUp, Loader2 } from 'lucide-react';
+import { AlertCircle, FileText, Upload, Sparkles, ClipboardEdit, ArrowRight, BookCheck, ThumbsUp, Loader2, FileQuestion, PencilRuler } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type Step = 'initial' | 'grading' | 'review';
@@ -24,6 +25,9 @@ export default function Home() {
   const [modelAnswer, setModelAnswer] = useState<string>('');
   const [studentFile, setStudentFile] = useState<File | null>(null);
   const [studentFilePreview, setStudentFilePreview] = useState<string | null>(null);
+  const [question, setQuestion] = useState('');
+  const [rubric, setRubric] = useState('');
+  const [questionFile, setQuestionFile] = useState<File | null>(null);
 
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
@@ -39,16 +43,25 @@ export default function Home() {
 
   const { toast } = useToast();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, fileType: 'student' | 'question') => {
     const file = e.target.files?.[0];
-    if (file && (file.type.startsWith('image/') || file.type === 'application/pdf')) {
-      setStudentFile(file);
-      setStudentFilePreview(URL.createObjectURL(file));
+    if (file) {
+      if (fileType === 'student') {
+        setStudentFile(file);
+        setStudentFilePreview(URL.createObjectURL(file));
+      } else {
+        setQuestionFile(file);
+        // We could show a preview for the question paper as well if needed
+      }
       setError(null);
     } else {
-      setError('Please upload a valid image file (JPEG, PNG, etc.). PDF support is experimental.');
-      setStudentFile(null);
-      setStudentFilePreview(null);
+      setError(`Please upload a valid file for the ${fileType} paper.`);
+       if (fileType === 'student') {
+        setStudentFile(null);
+        setStudentFilePreview(null);
+      } else {
+        setQuestionFile(null);
+      }
     }
   };
 
@@ -62,8 +75,8 @@ export default function Home() {
   };
 
   const handleGrade = useCallback(async () => {
-    if (!modelAnswer || !studentFile) {
-      setError('Please provide a model answer and upload a student answer sheet.');
+    if (!modelAnswer || !studentFile || !question) {
+      setError('Please provide the question, model answer, and upload a student answer sheet.');
       return;
     }
     
@@ -81,8 +94,8 @@ export default function Home() {
       
       setLoadingMessage('Scoring similarity and generating feedback...');
       const [scoreResult, feedbackResult] = await Promise.all([
-        scoreSimilarity({ studentAnswer: extractedText, modelAnswer }),
-        generateAiFeedback({ studentAnswer: extractedText, modelAnswer }),
+        scoreSimilarity({ studentAnswer: extractedText, modelAnswer, question, rubric }),
+        generateAiFeedback({ studentAnswer: extractedText, modelAnswer, question, rubric }),
       ]);
       
       setSimilarityScore(scoreResult.similarityScore);
@@ -106,10 +119,13 @@ export default function Home() {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [modelAnswer, studentFile, toast]);
+  }, [modelAnswer, studentFile, question, rubric, toast]);
 
   const handleReset = () => {
     setStep('initial');
+    setQuestion('');
+    setRubric('');
+    setQuestionFile(null);
     setModelAnswer('');
     setStudentFile(null);
     if (studentFilePreview) {
@@ -133,9 +149,47 @@ export default function Home() {
              <BookCheck className="w-12 h-12 text-primary"/>
           </div>
           <CardTitle className="text-3xl font-headline">Start a New Grading Session</CardTitle>
-          <CardDescription>Provide the model answer and the student's sheet to begin.</CardDescription>
+          <CardDescription>Provide the question, rubric, model answer, and the student's sheet to begin.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+        <div className="space-y-2">
+            <label htmlFor="question" className="font-semibold text-foreground flex items-center gap-2">
+              <FileQuestion className="w-5 h-5 text-primary" /> Question
+            </label>
+            <Textarea
+              id="question"
+              placeholder="Enter the question here..."
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              className="min-h-[100px] text-base"
+              aria-label="Question"
+            />
+            <div className="relative mt-2">
+                <Input id="question-paper" type="file" onChange={(e) => handleFileChange(e, 'question')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Question Paper Upload"/>
+                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center bg-background hover:border-primary transition-colors text-sm">
+                  {questionFile ? (
+                    <p className="text-sm text-green-600">{questionFile.name} selected. Click to change.</p>
+                  ) : (
+                    <p className="text-muted-foreground">Or upload question paper (optional)</p>
+                  )}
+                </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="rubric" className="font-semibold text-foreground flex items-center gap-2">
+              <PencilRuler className="w-5 h-5 text-primary" /> Grading Rubric (Optional)
+            </label>
+            <Textarea
+              id="rubric"
+              placeholder="Enter the grading rubric or criteria. E.g., '3 points for mentioning X, 2 points for explaining Y...'"
+              value={rubric}
+              onChange={(e) => setRubric(e.target.value)}
+              className="min-h-[100px] text-base"
+              aria-label="Grading Rubric"
+            />
+          </div>
+
           <div className="space-y-2">
             <label htmlFor="model-answer" className="font-semibold text-foreground flex items-center gap-2"><FileText className="w-5 h-5 text-primary" /> Model Answer</label>
             <Textarea
@@ -150,7 +204,7 @@ export default function Home() {
           <div className="space-y-2">
              <label htmlFor="student-sheet" className="font-semibold text-foreground flex items-center gap-2"><Upload className="w-5 h-5 text-primary" /> Student Answer Sheet</label>
              <div className="relative">
-                <Input id="student-sheet" type="file" accept="image/*,application/pdf" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Student Answer Sheet Upload"/>
+                <Input id="student-sheet" type="file" accept="image/*,application/pdf" onChange={(e) => handleFileChange(e, 'student')} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Student Answer Sheet Upload"/>
                 <div className="border-2 border-dashed border-border rounded-lg p-8 text-center bg-background hover:border-primary transition-colors">
                     {studentFilePreview ? (
                         <div className="flex flex-col items-center gap-2">
@@ -177,7 +231,7 @@ export default function Home() {
           )}
         </CardContent>
         <CardFooter>
-          <Button size="lg" className="w-full text-lg" disabled={!modelAnswer || !studentFile || isLoading} onClick={handleGrade}>
+          <Button size="lg" className="w-full text-lg" disabled={!modelAnswer || !studentFile || !question || isLoading} onClick={handleGrade}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -215,6 +269,23 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             {studentFilePreview && <Image src={studentFilePreview} alt="Student's answer sheet" width={800} height={1100} className="rounded-md border shadow-sm w-full" data-ai-hint="answer sheet"/>}
+          </CardContent>
+        </Card>
+         <Card>
+          <CardHeader>
+            <CardTitle className="font-headline">Question & Rubric</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <h4 className="font-semibold text-sm">Question</h4>
+              <p className="text-muted-foreground whitespace-pre-wrap mt-1">{question}</p>
+            </div>
+            {rubric && (
+              <div>
+                <h4 className="font-semibold text-sm">Rubric</h4>
+                <p className="text-muted-foreground whitespace-pre-wrap mt-1">{rubric}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -342,3 +413,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

@@ -19,6 +19,13 @@ const ScoreSimilarityInputSchema = z.object({
   modelAnswer: z
     .string()
     .describe('The expected answer or key points for the question.'),
+  question: z
+    .string()
+    .describe('The question that was asked.'),
+  rubric: z
+    .string()
+    .optional()
+    .describe('The optional rubric for grading the answer.'),
 });
 export type ScoreSimilarityInput = z.infer<typeof ScoreSimilarityInputSchema>;
 
@@ -44,13 +51,18 @@ const scoreSimilarityPrompt = ai.definePrompt({
   name: 'scoreSimilarityPrompt',
   input: {schema: ScoreSimilarityInputSchema},
   output: {schema: ScoreSimilarityOutputSchema},
-  prompt: `You are an AI assistant that evaluates the semantic similarity between a student's answer and a model answer.
+  prompt: `You are an AI assistant that evaluates the semantic similarity between a student's answer and a model answer, considering the question and an optional grading rubric.
 
-Given the student's answer and the model answer, compute a similarity score between 0 and 1, where 1 indicates a perfect match.
-Also, provide a justification for the score, highlighting the key similarities or differences between the two answers.
+Given the question, student's answer, model answer, and an optional rubric, compute a similarity score between 0 and 1, where 1 indicates a perfect match.
+If a rubric is provided, it should heavily influence the score.
+Also, provide a justification for the score, highlighting the key similarities or differences between the two answers based on the provided context.
 
+Question: {{{question}}}
 Student's Answer: {{{studentAnswer}}}
 Model Answer: {{{modelAnswer}}}
+{{#if rubric}}
+Rubric: {{{rubric}}}
+{{/if}}
 
 Ensure that your response follows the output schema exactly, especially the similarityScore being a number between 0 and 1.`,
 });
@@ -66,3 +78,5 @@ const scoreSimilarityFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
